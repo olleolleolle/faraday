@@ -42,6 +42,14 @@ module Faraday
     # @return [Hash] proxy options.
     attr_reader :proxy
 
+    # @return [Boolean] whether a url argument that looks like an absolute
+    #   URL (e.g. `http://` or `https://`) is allowed to replace this
+    #   connection's host, as opposed to being treated as a literal path
+    #   segment. Defaults to `true` for backward compatibility; set to
+    #   `false` to keep requests scoped to this connection's host even when
+    #   passed an untrusted, attacker-influenced path.
+    attr_accessor :allow_host_override
+
     # Initializes a new Faraday::Connection.
     #
     # @param url [URI, String] URI or String base URL to use as a prefix for all
@@ -59,6 +67,10 @@ module Faraday
     # @option options [URI, String] :proxy[:uri]
     # @option options [String] :proxy[:user]
     # @option options [String] :proxy[:password]
+    # @option options [Boolean] :allow_host_override (true) whether an
+    #                 absolute-looking url argument (e.g. `http://`, `https://`)
+    #                 may replace this connection's host. Set to `false` to
+    #                 always scope requests to this connection's host.
     # @yield [self] after all setup has been done
     def initialize(url = nil, options = nil)
       options = ConnectionOptions.from(options)
@@ -75,6 +87,7 @@ module Faraday
       @ssl = options.ssl
       @default_parallel_manager = options.parallel_manager
       @manual_proxy = nil
+      @allow_host_override = options.allow_host_override != false
 
       @builder = options.builder || begin
         # pass an empty block to Builder so it doesn't assume default middleware
@@ -483,15 +496,26 @@ module Faraday
       end
       url = url.to_s if url.respond_to?(:host)
       # Ensure relative url will be parsed correctly (such as `service:search` or `//evil.com`)
-      url = "./#{url}" if url.respond_to?(:start_with?) &&
-                          (url.start_with?('//') ||
-                           !url.start_with?('http://', 'https://', '/', './', '../'))
+      url = "./#{url}" if url.respond_to?(:start_with?) && host_override_disallowed?(url)
       uri = url ? base + url : base
       if params
         uri.query = params.to_query(params_encoder || options.params_encoder)
       end
       uri.query = nil if uri.query && uri.query.empty?
       uri
+    end
+
+    # @api private
+    #
+    # @param url [String]
+    # @return [Boolean] whether the given url string should be treated as a
+    #   relative path rather than merged as-is (which could replace the host).
+    def host_override_disallowed?(url)
+      return true if url.start_with?('//')
+      return true unless url.start_with?('http://', 'https://', '/', './', '../')
+      return true if !allow_host_override && url.start_with?('http://', 'https://')
+
+      false
     end
 
     # Creates a duplicate of this Faraday::Connection.

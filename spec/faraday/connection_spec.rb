@@ -351,6 +351,39 @@ RSpec.describe Faraday::Connection do
       end
     end
 
+    context 'with `allow_host_override` disabled (GH-1684)' do
+      before { conn.allow_host_override = false }
+
+      it 'does not allow host override with an absolute http:// url' do
+        conn.url_prefix = 'http://httpbingo.org/api'
+        uri = conn.build_exclusive_url('http://evil.com/path')
+        expect(uri.host).to eq('httpbingo.org')
+        expect(uri.path).to eq('/api/http://evil.com/path')
+      end
+
+      it 'does not allow host override with an absolute https:// url' do
+        conn.url_prefix = 'http://httpbingo.org/api'
+        uri = conn.build_exclusive_url('https://evil.com/path')
+        expect(uri.host).to eq('httpbingo.org')
+        expect(uri.path).to eq('/api/https://evil.com/path')
+      end
+
+      it 'still allows single-slash absolute paths' do
+        conn.url_prefix = 'http://httpbingo.org/api'
+        uri = conn.build_exclusive_url('/safe/path')
+        expect(uri.host).to eq('httpbingo.org')
+        expect(uri.path).to eq('/safe/path')
+      end
+    end
+
+    context 'with `allow_host_override` enabled (default)' do
+      it 'allows host override with an absolute http:// url' do
+        conn.url_prefix = 'http://httpbingo.org/api'
+        uri = conn.build_exclusive_url('http://evil.com/path')
+        expect(uri.host).to eq('evil.com')
+      end
+    end
+
     context 'with a custom `default_uri_parser`' do
       let(:url) { 'http://httpbingo.org' }
       let(:parser) { Addressable::URI }

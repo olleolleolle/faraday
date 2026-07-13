@@ -7,7 +7,7 @@ module Faraday
   #   class ConnectionOptions < Options; end
   ConnectionOptions = Options.new(:request, :proxy, :ssl, :builder, :url,
                                   :parallel_manager, :params, :headers,
-                                  :builder_class) do
+                                  :builder_class, :allow_host_override) do
     options request: RequestOptions, ssl: SSLOptions
 
     memoized(:request) { self.class.options_for(:request).new }
